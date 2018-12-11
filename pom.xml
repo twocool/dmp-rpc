@@ -11,6 +11,8 @@
   <modules>
     <module>dmp-rpc-server</module>
     <module>dmp-rpc-protocol</module>
+    <module>dmp-rpc-client</module>
+    <module>dmp-rpc-client</module>
   </modules>
 
   <name>dmp-rpc</name>
