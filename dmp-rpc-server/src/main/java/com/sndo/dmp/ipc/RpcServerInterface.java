@@ -10,7 +10,7 @@ public interface RpcServerInterface {
 
     void stop();
 
-    void setSocketBufSize(int size);
+    void setSocketSendBufSize(int size);
 
     InetSocketAddress getListenerAddress();
 
