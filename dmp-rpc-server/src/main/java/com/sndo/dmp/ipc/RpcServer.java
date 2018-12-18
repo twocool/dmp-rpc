@@ -7,6 +7,7 @@ import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
 
 import java.io.IOException;
+import java.io.UnsupportedEncodingException;
 import java.net.*;
 import java.nio.ByteBuffer;
 import java.nio.channels.*;
@@ -14,7 +15,6 @@ import java.nio.channels.spi.AbstractSelectableChannel;
 import java.util.*;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
-import java.util.regex.MatchResult;
 
 public class RpcServer implements RpcServerInterface, RpcErrorHandler {
 
@@ -47,7 +47,7 @@ public class RpcServer implements RpcServerInterface, RpcErrorHandler {
 
     private static int NIO_BUFFER_LIMIT = 64 * 1024; // should not be more than 64KB.
 
-    private RpcServer(final String name,
+    public RpcServer(final String name,
                       final List<BlockingServiceAndInterface> services,
                       final InetSocketAddress bindAddress,
                       Configuration conf,
@@ -57,7 +57,7 @@ public class RpcServer implements RpcServerInterface, RpcErrorHandler {
         this.conf = conf;
 
         this.maxQueueSize = 1024 * 1024 * 1024; // max callqueue size
-        this.readThreadSize = 10;  // read threadpool size
+        this.readThreadSize = 1;  // read threadpool size
         this.maxIdleTime = 2 * 1000;    // connection maxidletime
         this.thresholdIdleConnections = 4000;   // client idlethreshold
         this.maxConnections2Nuke = 10; // client kill max
@@ -81,7 +81,7 @@ public class RpcServer implements RpcServerInterface, RpcErrorHandler {
 
         listener.start();
         responder.start();
-        scheduler.start();
+//        scheduler.start();
 
         started = true;
     }
@@ -89,6 +89,13 @@ public class RpcServer implements RpcServerInterface, RpcErrorHandler {
     @Override
     public boolean isStarted() {
         return false;
+    }
+
+    @Override
+    public synchronized void join() throws InterruptedException {
+        while (running) {
+            wait();
+        }
     }
 
     @Override
@@ -204,10 +211,32 @@ public class RpcServer implements RpcServerInterface, RpcErrorHandler {
             return this.hostAddress;
         }
 
-        // TODO
-        public int readAndProcess() throws InterruptedException {
+        public int readAndProcess() throws InterruptedException, IOException {
+            int count = read4bytes();
+            if (count < 0) {
+                return count;
+            }
 
-            return -1;
+            dataLengthBuffer.flip();
+            int dataLength = dataLengthBuffer.getInt();
+            data = ByteBuffer.allocate(dataLength);
+
+            count = channelRead(channel, data);
+
+            if (count >= 0 || data.remaining() == 0) {
+                process();
+            }
+
+            return count;
+        }
+
+        // TODO
+        private void process() {
+            try {
+                System.out.println(new String(data.array(), "utf-8"));
+            } catch (UnsupportedEncodingException e) {
+                e.printStackTrace();
+            }
         }
 
         private int read4bytes() throws IOException {
@@ -313,7 +342,7 @@ public class RpcServer implements RpcServerInterface, RpcErrorHandler {
 
             acceptChannel.register(selector, SelectionKey.OP_ACCEPT);
 
-            this.setName("RpcServer.listener,port=" + port);
+            this.setName("RpcServer.listener, port=" + port);
             this.setDaemon(true);
         }
 
@@ -338,16 +367,14 @@ public class RpcServer implements RpcServerInterface, RpcErrorHandler {
                 }
             }
 
-            // TODO
-            private void doRunLoop() {
+            private synchronized void doRunLoop() {
                 while (running) {
                     try {
-                        selector.select();
+                        readSelector.select();
                         while (adding) {
                             this.wait(1000);
                         }
-
-                        Iterator<SelectionKey> iter = selector.selectedKeys().iterator();
+                        Iterator<SelectionKey> iter = readSelector.selectedKeys().iterator();
                         while (iter.hasNext()) {
                             SelectionKey key = iter.next();
                             iter.remove();
@@ -367,7 +394,7 @@ public class RpcServer implements RpcServerInterface, RpcErrorHandler {
 
             public void startAdd() {
                 adding = true;
-                selector.wakeup();
+                readSelector.wakeup();
             }
 
             public void finishAdd() {
@@ -376,17 +403,17 @@ public class RpcServer implements RpcServerInterface, RpcErrorHandler {
             }
 
             public synchronized SelectionKey registerChannel(SocketChannel channel) throws ClosedChannelException {
-                return channel.register(selector, SelectionKey.OP_READ);
+                return channel.register(readSelector, SelectionKey.OP_READ);
             }
 
         }
 
         @Override
         public void run() {
-            super.run();
+            LOG.info(getName() + ": starting.");
             SelectionKey key = null;
-            try {
-                while (running) {
+            while (running) {
+                try {
                     selector.select();
                     Iterator<SelectionKey> iterator = selector.selectedKeys().iterator();
                     while (iterator.hasNext()) {
@@ -398,21 +425,40 @@ public class RpcServer implements RpcServerInterface, RpcErrorHandler {
                             }
                         }
                     }
-                }
-            } catch (OutOfMemoryError e) {
-                if (checkOOME(e)) {
-                    LOG.info(getName() + ": exiting on outOfMemoryError.");
+                } catch (OutOfMemoryError e) {
+                    if (checkOOME(e)) {
+                        LOG.info(getName() + ": exiting on outOfMemoryError.");
+                        closeCurrentConnection(key, e);
+                        cleanupConnections(true);
+                        return;
+                    }
+                } catch (Exception e) {
                     closeCurrentConnection(key, e);
-                    cleanupConnections(true);
-                    return;
                 }
-            } catch (Exception e) {
-                closeCurrentConnection(key, e);
+                cleanupConnections(false);
             }
-            cleanupConnections(false);
+
+            LOG.info(getName() + ": stopping.");
+
+            synchronized (this) {
+                try {
+                    acceptChannel.close();
+                    selector.close();
+                } catch (IOException e) {
+                    if (LOG.isTraceEnabled()) {
+                        LOG.trace(getName() + ": ignored", e);
+                    }
+                }
+
+                selector = null;
+                acceptChannel = null;
+
+                while (!connectionList.isEmpty()) {
+                    closeConnection(connectionList.remove(0));
+                }
+            }
         }
 
-        // TODO
         private void doRead(SelectionKey key) throws InterruptedException {
             Connection c = (Connection) key.attachment();
             if (c == null) {
@@ -509,7 +555,6 @@ public class RpcServer implements RpcServerInterface, RpcErrorHandler {
             }
         }
 
-        // TODO
         private void doAccept(SelectionKey key) throws IOException {
             ServerSocketChannel sever = (ServerSocketChannel) key.channel();
 
