@@ -8,6 +8,8 @@ public interface RpcServerInterface {
 
     boolean isStarted();
 
+    void join() throws InterruptedException;
+
     void stop();
 
     void setSocketSendBufSize(int size);
