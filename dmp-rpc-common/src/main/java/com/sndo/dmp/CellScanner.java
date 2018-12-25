@@ -5,4 +5,5 @@ package com.sndo.dmp;
  * @date 2018/12/18 17:10
  **/
 public interface CellScanner {
+
 }

@@ -15,6 +15,8 @@ import java.io.IOException;
 import java.net.InetSocketAddress;
 import java.net.SocketAddress;
 import java.util.Map;
+import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicInteger;
 
 /**
  * @author yangqi
@@ -26,8 +28,13 @@ public class RpcClientImpl extends AbstractRpcClient {
     private final SocketFactory socketFactory;
     private final PoolMap<ConnectionId, Connection> connections;
 
-    RpcClientImpl(Configuration conf, SocketFactory factory, SocketAddress localAddr) {
+    private final AtomicInteger callIdCnt = new AtomicInteger();
+
+    private final AtomicBoolean running = new AtomicBoolean(true);
+
+    public RpcClientImpl(Configuration conf, SocketFactory factory, SocketAddress localAddr) {
         super(conf, localAddr);
+
         this.socketFactory = factory;
         this.connections = new PoolMap<ConnectionId, Connection>(getPoolType(conf), getPoolSize(conf));
 //        this.failedServers = new FailedServers(conf);
@@ -47,7 +54,24 @@ public class RpcClientImpl extends AbstractRpcClient {
     protected Pair<Message, CellScanner> call(PayloadCarryingRpcController pcrc,
                                               Descriptors.MethodDescriptor method,
                                               Message param, Message returnType,
-                                              InetSocketAddress isa) {
+                                              InetSocketAddress addr) {
+        if (pcrc == null) {
+            pcrc = new PayloadCarryingRpcController();
+        }
+        CellScanner cells = pcrc.cellScanner();
+
+        final Call call = new Call(this.callIdCnt.getAndIncrement(), method, param, cells, returnType, pcrc.getCallTimeout());
+
+        return null;
+    }
+
+
+    private Connection getConnection(Call call, InetSocketAddress addr) throws IOException {
+        if (!running.get()) {
+            throw new StoppedRpcClientException();
+        }
+        Connection connection;
+
         return null;
     }
 
