@@ -44,8 +44,13 @@
         </dependency>
 
         <dependency>
-            <groupId>com.sndo.dmp</groupId>
-            <artifactId>dmp-rpc-common</artifactId>
+            <groupId>org.apache.hbase</groupId>
+            <artifactId>hbase-protocol</artifactId>
+        </dependency>
+
+        <dependency>
+            <groupId>org.apache.hbase</groupId>
+            <artifactId>hbase-common</artifactId>
         </dependency>
 
     </dependencies>

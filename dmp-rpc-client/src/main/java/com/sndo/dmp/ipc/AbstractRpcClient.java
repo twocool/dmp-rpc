@@ -1,15 +1,19 @@
 package com.sndo.dmp.ipc;
 
 import com.google.protobuf.*;
-import com.sndo.dmp.CellScanner;
-import com.sndo.dmp.Constants;
 import com.sndo.dmp.ServerName;
-import com.sndo.dmp.conf.Configuration;
-import com.sndo.dmp.util.EnviromentEdgeManager;
-import com.sndo.dmp.util.Pair;
+import com.sndo.dmp.client.MetricsConnection;
 import com.sndo.dmp.util.PoolMap;
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
+import org.apache.hadoop.conf.Configuration;
+import org.apache.hadoop.hbase.CellScanner;
+import org.apache.hadoop.hbase.HConstants;
+import org.apache.hadoop.hbase.codec.Codec;
+import org.apache.hadoop.hbase.codec.KeyValueCodec;
+import org.apache.hadoop.hbase.util.EnvironmentEdgeManager;
+import org.apache.hadoop.hbase.util.Pair;
+import org.apache.hadoop.io.compress.CompressionCodec;
 
 import java.io.IOException;
 import java.net.InetSocketAddress;
@@ -23,19 +27,24 @@ public abstract class AbstractRpcClient implements RpcClient {
 
     private static final Log LOG = LogFactory.getLog(AbstractRpcClient.class);
 
-    private final Configuration conf;
-    private final SocketAddress localAddr;
+    protected final Configuration conf;
+    protected final SocketAddress localAddr;
 
     private final int minIdleTimeBeforeClose;
-    private final int maxRetries;
-    private final long failureSleep;
+    protected final int maxRetries;
+    protected final long failureSleep;
 
-    private final boolean tcpNoDelay;
-    private final boolean tcpKeepAlive;
+    protected final boolean tcpNoDelay;
+    protected final boolean tcpKeepAlive;
 
-    private final int connectTimeout;
-    private final int readTimeout;
-    private final int writeTimeout;
+    protected final int connectTimeout;
+    protected final int readTimeout;
+    protected final int writeTimeout;
+
+    protected final Codec codec;
+    protected final CompressionCodec compressor;
+
+    protected final IPCUtil ipcUtil;
 
     public AbstractRpcClient(Configuration conf, SocketAddress localAddr) {
         this.conf = conf;
@@ -52,19 +61,52 @@ public abstract class AbstractRpcClient implements RpcClient {
         this.connectTimeout = DEFAULT_SOCKET_TIMEOUT_CONNECT;
         this.readTimeout = DEFAULT_SOCKET_TIMEOUT_READ;
         this.writeTimeout = DEFAULT_SOCKET_TIMEOUT_WRITE;
+
+        this.codec = getCodec();    // 默认为空
+        this.compressor = getCompressor();  // 默认为空
+
+        this.ipcUtil = new IPCUtil(conf);
+    }
+
+    Codec getCodec() {
+        // For NO CODEC, "hbase.client.rpc.codec" must be configured with empty string AND
+        // "hbase.client.default.rpc.codec" also -- because default is to do cell block encoding.
+        String className = conf.get(HConstants.RPC_CODEC_CONF_KEY, getDefaultCodec(this.conf));
+        if (className == null || className.length() == 0) return null;
+        try {
+            return (Codec)Class.forName(className).newInstance();
+        } catch (Exception e) {
+            throw new RuntimeException("Failed getting codec " + className, e);
+        }
+    }
+
+    public static String getDefaultCodec(final Configuration c) {
+        // If "hbase.client.default.rpc.codec" is empty string -- you can't set it to null because
+        // Configuration will complain -- then no default codec (and we'll pb everything).  Else
+        // default is KeyValueCodec
+        return c.get(DEFAULT_CODEC_CLASS, KeyValueCodec.class.getCanonicalName());
+    }
+
+    private CompressionCodec getCompressor() {
+        String className = conf.get("hbase.client.rpc.compressor", null);
+        if (className == null || className.isEmpty()) return null;
+        try {
+            return (CompressionCodec)Class.forName(className).newInstance();
+        } catch (Exception e) {
+            throw new RuntimeException("Failed getting compressor " + className, e);
+        }
     }
 
     protected static PoolMap.PoolType getPoolType(Configuration config) {
         return PoolMap.PoolType
-                .valueOf(config.get(Constants.CLIENT_IPC_POOL_TYPE), PoolMap.PoolType.RoundRobin,
+                .valueOf(config.get(HConstants.HBASE_CLIENT_IPC_POOL_TYPE), PoolMap.PoolType.RoundRobin,
                         PoolMap.PoolType.ThreadLocal);
     }
 
     protected static int getPoolSize(Configuration config) {
-        return config.getInt(Constants.CLIENT_IPC_POOL_SIZE, 1);
+        return config.getInt(HConstants.HBASE_CLIENT_IPC_POOL_SIZE, 1);
     }
 
-    // TODO
     private Message callBlockingMethod(Descriptors.MethodDescriptor method, PayloadCarryingRpcController pcrc,
                                        Message param, Message returnType, final InetSocketAddress isa) throws ServiceException {
         if (pcrc == null) {
@@ -73,12 +115,13 @@ public abstract class AbstractRpcClient implements RpcClient {
 
         Pair<Message, CellScanner> val;
         try {
-            long begin = EnviromentEdgeManager.currentTime();
-
-            val = call(pcrc, method, param, returnType, isa);
-//            pcrc.setCellScanner(val.getSecond()); // TODO
+            final MetricsConnection.CallStats callStats = MetricsConnection.callStats();
+            callStats.setStartTime(EnvironmentEdgeManager.currentTime());
+            val = call(pcrc, method, param, returnType, isa, callStats);
+            pcrc.setCellScanner(val.getSecond());
+            callStats.setCallTimeMs(EnvironmentEdgeManager.currentTime() - callStats.getStartTime());
             if (LOG.isTraceEnabled()) {
-                LOG.trace("Call: " + method.getName() + ", callTime: " + (EnviromentEdgeManager.currentTime() - begin) + "ms");
+                LOG.trace("Call: " + method.getName() + ", callTime: " + (EnvironmentEdgeManager.currentTime() - callStats.getStartTime()) + "ms");
             }
             return val.getFirst();
         } catch (Throwable e) {
@@ -87,7 +130,7 @@ public abstract class AbstractRpcClient implements RpcClient {
     }
 
     protected abstract Pair<Message, CellScanner> call(PayloadCarryingRpcController pcrc, Descriptors.MethodDescriptor method,
-                                                       Message param, Message returnType, InetSocketAddress isa);
+                                                       Message param, Message returnType, InetSocketAddress isa, MetricsConnection.CallStats callStats) throws IOException;
 
     @Override
     public BlockingRpcChannel createBlockingRpcChannel(ServerName serverName, int rpcTimeout) {

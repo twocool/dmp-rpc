@@ -1,6 +1,6 @@
 package com.sndo.dmp.ipc;
 
-import com.sndo.dmp.HBaseIOException;
+import org.apache.hadoop.hbase.HBaseIOException;
 
 public class StoppedRpcClientException extends HBaseIOException {
 

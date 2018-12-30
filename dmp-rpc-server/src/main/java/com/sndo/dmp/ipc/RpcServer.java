@@ -2,10 +2,10 @@ package com.sndo.dmp.ipc;
 
 import com.google.common.util.concurrent.ThreadFactoryBuilder;
 import com.google.protobuf.BlockingService;
-import com.sndo.dmp.conf.Configuration;
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
 
+import javax.security.auth.login.Configuration;
 import java.io.IOException;
 import java.io.UnsupportedEncodingException;
 import java.net.*;
