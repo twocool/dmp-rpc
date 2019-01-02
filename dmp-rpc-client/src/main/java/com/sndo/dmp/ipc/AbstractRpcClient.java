@@ -3,6 +3,7 @@ package com.sndo.dmp.ipc;
 import com.google.protobuf.*;
 import com.sndo.dmp.ServerName;
 import com.sndo.dmp.client.MetricsConnection;
+import com.sndo.dmp.exceptions.ConnectionClosingException;
 import com.sndo.dmp.util.PoolMap;
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
@@ -16,8 +17,10 @@ import org.apache.hadoop.hbase.util.Pair;
 import org.apache.hadoop.io.compress.CompressionCodec;
 
 import java.io.IOException;
+import java.net.ConnectException;
 import java.net.InetSocketAddress;
 import java.net.SocketAddress;
+import java.net.SocketTimeoutException;
 
 public abstract class AbstractRpcClient implements RpcClient {
 
@@ -101,6 +104,23 @@ public abstract class AbstractRpcClient implements RpcClient {
 
     protected static int getPoolSize(Configuration config) {
         return config.getInt(HConstants.HBASE_CLIENT_IPC_POOL_SIZE, 1);
+    }
+
+    protected IOException wrapException(InetSocketAddress addr, Exception exception) {
+        if (exception instanceof ConnectException) {
+            // connection refused; include the host:port in the error
+            return (ConnectException) new ConnectException("Call to " + addr
+                    + " failed on connection exception: " + exception).initCause(exception);
+        } else if (exception instanceof SocketTimeoutException) {
+            return (SocketTimeoutException) new SocketTimeoutException("Call to " + addr
+                    + " failed because " + exception).initCause(exception);
+        } else if (exception instanceof ConnectionClosingException) {
+            return (ConnectionClosingException) new ConnectionClosingException("Call to " + addr
+                    + " failed on local exception: " + exception).initCause(exception);
+        } else {
+            return (IOException) new IOException("Call to " + addr + " failed on local exception: "
+                    + exception).initCause(exception);
+        }
     }
 
     private Message callBlockingMethod(Descriptors.MethodDescriptor method, PayloadCarryingRpcController pcrc,

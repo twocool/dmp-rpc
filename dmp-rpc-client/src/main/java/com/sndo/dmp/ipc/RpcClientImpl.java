@@ -27,6 +27,7 @@ import javax.net.SocketFactory;
 import java.io.*;
 import java.net.*;
 import java.nio.ByteBuffer;
+import java.rmi.RemoteException;
 import java.util.Iterator;
 import java.util.Map;
 import java.util.concurrent.ConcurrentSkipListMap;
@@ -98,7 +99,7 @@ public class RpcClientImpl extends AbstractRpcClient {
                     if (call.done) {
                         break;
                     }
-                    call.wait(Math.min(call.remainingTime(), 1000) + 1);
+                    call.wait(Math.min(call.remainingTime(), 1000) + 1);    // 为什么要+1
                 }
             } catch (InterruptedException e) {
                 call.setException(new InterruptedIOException());
@@ -106,7 +107,15 @@ public class RpcClientImpl extends AbstractRpcClient {
             }
         }
 
-        return null;
+        if (call.error != null) {
+            if (call.error instanceof RemoteException) {
+                call.error.fillInStackTrace();
+                throw call.error;
+            }
+            throw wrapException(addr, call.error);
+        }
+
+        return new Pair<Message, CellScanner>(call.response, call.cells);
     }
 
 
@@ -508,6 +517,7 @@ public class RpcClientImpl extends AbstractRpcClient {
 
         @Override
         public void run() {
+
         }
 
     }
