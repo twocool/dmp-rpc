@@ -48,6 +48,16 @@ public class Call {
         }
     }
 
+    public int remainingTime() {
+        if (timeout == 0) {
+            return Integer.MAX_VALUE;
+        }
+
+        int remaining = timeout - (int)(EnvironmentEdgeManager.currentTime() - getStartTime());
+        return remaining > 0 ? remaining : 0;
+
+    }
+
     public synchronized void callComplete() {
         this.done = true;
         notify();
@@ -57,8 +67,6 @@ public class Call {
         this.error = error;
         callComplete();
     }
-
-
 
     public long getStartTime() {
         return this.callStats.getStartTime();

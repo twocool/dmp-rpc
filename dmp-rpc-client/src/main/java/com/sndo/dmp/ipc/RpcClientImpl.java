@@ -29,15 +29,10 @@ import java.net.*;
 import java.nio.ByteBuffer;
 import java.util.Iterator;
 import java.util.Map;
-import java.util.Random;
 import java.util.concurrent.ConcurrentSkipListMap;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 
-/**
- * @author yangqi
- * @date 2018/12/18 17:20
- **/
 public class RpcClientImpl extends AbstractRpcClient {
 
     private static final Log LOG = LogFactory.getLog(RpcClientImpl.class);
@@ -72,7 +67,7 @@ public class RpcClientImpl extends AbstractRpcClient {
     protected Pair<Message, CellScanner> call(PayloadCarryingRpcController pcrc,
                                               Descriptors.MethodDescriptor method,
                                               Message param, Message returnType,
-                                              InetSocketAddress addr, MetricsConnection.CallStats callStats) throws IOException {
+                                              InetSocketAddress addr, MetricsConnection.CallStats callStats) throws IOException, InterruptedException {
         if (pcrc == null) {
             pcrc = new PayloadCarryingRpcController();
         }
@@ -88,6 +83,29 @@ public class RpcClientImpl extends AbstractRpcClient {
             callFuture = null;
             connection.writeRequest(call, pcrc.getPriority());
         }
+
+        while (!call.done) {
+            if (call.checkAndSetTimeout()) {
+                // TODO
+                break;
+            }
+            if (connection.shouldCloseConnection.get()) {
+                throw new ConnectionClosingException("Call id=" + call.id + " on server " + addr +
+                        " aborted: connection is closing");
+            }
+            try {
+                synchronized (call) {
+                    if (call.done) {
+                        break;
+                    }
+                    call.wait(Math.min(call.remainingTime(), 1000) + 1);
+                }
+            } catch (InterruptedException e) {
+                call.setException(new InterruptedIOException());
+                throw e;
+            }
+        }
+
         return null;
     }
 
@@ -212,6 +230,7 @@ public class RpcClientImpl extends AbstractRpcClient {
             setupIOstreams();
             checkIsOpen();
 
+            IOException writeException = null;
             synchronized (this.outLock) {
                 if (Thread.interrupted()) {
                     throw new InterruptedIOException();
@@ -219,9 +238,30 @@ public class RpcClientImpl extends AbstractRpcClient {
 
                 calls.put(call.id, call);
                 checkIsOpen();
-                call.callStats.setRequestSizeBytes(-1); // TODO
+
+                try {
+                    call.callStats.setRequestSizeBytes(IPCUtil.write(this.out, header, call.param,  cellBlock));
+                } catch (IOException ie) {
+                    shouldCloseConnection.set(true);
+                    writeException = ie;
+                    interrupt();
+                }
             }
 
+            if (writeException != null) {
+                markClose(writeException);
+                close();
+            }
+
+            doNotify();
+
+            if (writeException != null) {
+                throw writeException;
+            }
+        }
+
+        private synchronized void doNotify() {
+            notifyAll();
         }
 
         private void checkIsOpen() throws IOException {

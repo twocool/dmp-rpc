@@ -1,9 +1,5 @@
 package com.sndo.dmp.client;
 
-/**
- * @author yangqi
- * @date 2018/12/29 16:01
- **/
 public class MetricsConnection {
 
     public static class CallStats {

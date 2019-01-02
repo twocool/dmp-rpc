@@ -19,10 +19,6 @@ import java.io.IOException;
 import java.net.InetSocketAddress;
 import java.net.SocketAddress;
 
-/**
- * @author yangqi
- * @date 2018/12/18 15:26
- **/
 public abstract class AbstractRpcClient implements RpcClient {
 
     private static final Log LOG = LogFactory.getLog(AbstractRpcClient.class);
@@ -130,7 +126,7 @@ public abstract class AbstractRpcClient implements RpcClient {
     }
 
     protected abstract Pair<Message, CellScanner> call(PayloadCarryingRpcController pcrc, Descriptors.MethodDescriptor method,
-                                                       Message param, Message returnType, InetSocketAddress isa, MetricsConnection.CallStats callStats) throws IOException;
+                                                       Message param, Message returnType, InetSocketAddress isa, MetricsConnection.CallStats callStats) throws IOException, InterruptedException;
 
     @Override
     public BlockingRpcChannel createBlockingRpcChannel(ServerName serverName, int rpcTimeout) {

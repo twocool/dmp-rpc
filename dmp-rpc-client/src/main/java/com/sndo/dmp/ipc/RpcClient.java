@@ -6,10 +6,6 @@ import com.sndo.dmp.ServerName;
 import java.io.Closeable;
 import java.io.IOException;
 
-/**
- * @author yangqi
- * @date 2018/12/18 15:18
- **/
 public interface RpcClient extends Closeable {
 
     public final static String FAILED_SERVER_EXPIRY_KEY = "hbase.ipc.client.failed.servers.expiry";

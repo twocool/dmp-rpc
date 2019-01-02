@@ -1,9 +1,5 @@
 package com.sndo.dmp;
 
-/**
- * @author yangqi
- * @date 2018/12/17 20:36
- **/
 public class ByteUtil {
 
     public static int byte2Int(byte[] bytes) {

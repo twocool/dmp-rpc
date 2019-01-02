@@ -2,10 +2,6 @@ package com.sndo.dmp.ipc;
 
 import java.net.InetSocketAddress;
 
-/**
- * @author yangqi
- * @date 2018/12/18 17:41
- **/
 public class ConnectionId {
 
     final String serviceName;

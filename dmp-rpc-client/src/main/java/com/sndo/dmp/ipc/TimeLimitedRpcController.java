@@ -3,10 +3,6 @@ package com.sndo.dmp.ipc;
 import com.google.protobuf.RpcCallback;
 import com.google.protobuf.RpcController;
 
-/**
- * @author yangqi
- * @date 2018/12/18 16:24
- **/
 public class TimeLimitedRpcController implements RpcController {
 
     private volatile Integer callTimeout;

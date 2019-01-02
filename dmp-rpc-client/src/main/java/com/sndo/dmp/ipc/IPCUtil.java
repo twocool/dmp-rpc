@@ -25,10 +25,6 @@ import java.io.OutputStream;
 import java.nio.BufferOverflowException;
 import java.nio.ByteBuffer;
 
-/**
- * @author yangqi
- * @date 2018/12/26 16:23
- **/
 public class IPCUtil {
 
     public static final Log LOG = LogFactory.getLog(IPCUtil.class);

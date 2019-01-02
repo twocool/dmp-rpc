@@ -3,10 +3,6 @@ package com.sndo.dmp.protobuf;
 import org.apache.hadoop.hbase.protobuf.generated.HBaseProtos;
 import org.apache.hadoop.hbase.util.VersionInfo;
 
-/**
- * @author yangqi
- * @date 2018/12/28 16:38
- **/
 public class ProtobufUtil {
 
     public static HBaseProtos.VersionInfo getVersionInfo() {

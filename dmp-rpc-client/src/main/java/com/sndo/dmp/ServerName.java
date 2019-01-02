@@ -1,9 +1,5 @@
 package com.sndo.dmp;
 
-/**
- * @author yangqi
- * @date 2018/12/18 15:23
- **/
 public class ServerName {
 
     private final String servername;

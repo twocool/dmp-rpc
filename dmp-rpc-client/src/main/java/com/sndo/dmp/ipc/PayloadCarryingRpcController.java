@@ -8,10 +8,6 @@ import org.apache.hadoop.hbase.HConstants;
 
 import java.util.List;
 
-/**
- * @author yangqi
- * @date 2018/12/18 16:25
- **/
 public class PayloadCarryingRpcController extends TimeLimitedRpcController implements CellScannable {
 
     private int priority = HConstants.NORMAL_QOS;
