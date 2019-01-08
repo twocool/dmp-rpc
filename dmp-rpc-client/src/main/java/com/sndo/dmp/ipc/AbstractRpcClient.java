@@ -29,7 +29,7 @@ public abstract class AbstractRpcClient implements RpcClient {
     protected final Configuration conf;
     protected final SocketAddress localAddr;
 
-    private final int minIdleTimeBeforeClose;
+    protected final int minIdleTimeBeforeClose;
     protected final int maxRetries;
     protected final long failureSleep;
 

@@ -258,7 +258,7 @@ public class RpcClientImpl extends AbstractRpcClient {
             }
 
             if (writeException != null) {
-                markClose(writeException);
+                markClosed(writeException);
                 close();
             }
 
@@ -295,7 +295,7 @@ public class RpcClientImpl extends AbstractRpcClient {
                 }
                 IOException e = new FailedServerException(
                         "This server is in the failed servers list:" + server);
-                markClose(e);
+                markClosed(e);
                 close();
                 throw e;
             }
@@ -330,7 +330,7 @@ public class RpcClientImpl extends AbstractRpcClient {
                         e = new IOException("Cloud not set up IO streams to " + server, t);
                     }
                 }
-                markClose(e);
+                markClosed(e);
                 close();
                 throw e;
             }
@@ -496,7 +496,7 @@ public class RpcClientImpl extends AbstractRpcClient {
             return remoteId.getAddress();
         }
 
-        private synchronized boolean markClose(IOException e) {
+        private synchronized boolean markClosed(IOException e) {
             if (e == null) {
                 throw new NullPointerException();
             }
@@ -517,7 +517,61 @@ public class RpcClientImpl extends AbstractRpcClient {
 
         @Override
         public void run() {
+            if (LOG.isTraceEnabled()) {
+                LOG.trace(getName() + ": starting, connections " + connections.size());
+            }
 
+            try {
+                while (waitForWork()) { // Wait here for work - read or close connection
+                    readResponse();
+                }
+            } catch (InterruptedException t) {
+                if (LOG.isTraceEnabled()) {
+                    LOG.trace(getName() + ": interrupted while waiting for call responses");
+                }
+                markClosed(ExceptionUtil.asInterrupt(t));
+            } catch (Throwable t) {
+                if (LOG.isDebugEnabled()) {
+                    LOG.debug(getName() + ": unexpected throwable while waiting for call responses", t);
+                }
+                markClosed(new IOException("Unexpected throwable while waiting call responses", t));
+            }
+        }
+
+        private void readResponse() {
+            if (shouldCloseConnection.get()) {
+                return;
+            }
+
+
+
+        }
+
+        private synchronized boolean waitForWork() throws InterruptedException {
+            long waitUntil = EnvironmentEdgeManager.currentTime() + minIdleTimeBeforeClose;
+
+            while (true) {
+                if (shouldCloseConnection.get()) {
+                    return false;
+                }
+
+                if (!running.get()) {
+                    markClosed(new IOException("stop with " + calls.size() + " pending request(s)."));
+                    return false;
+                }
+
+                if (!calls.isEmpty()) {
+                    return true;
+                }
+
+                if  (EnvironmentEdgeManager.currentTime() >= waitUntil) {
+                    markClosed(new IOException("stop with " + calls.size() + " pending request(s)."));
+                    return false;
+                }
+
+                wait(Math.min(minIdleTimeBeforeClose, 1000));
+
+            }
         }
 
     }
