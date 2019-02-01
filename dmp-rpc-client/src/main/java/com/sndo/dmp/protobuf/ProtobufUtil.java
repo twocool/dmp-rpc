@@ -1,7 +1,13 @@
 package com.sndo.dmp.protobuf;
 
+import com.google.protobuf.CodedInputStream;
+import com.google.protobuf.Message;
+import org.apache.hadoop.hbase.io.LimitInputStream;
 import org.apache.hadoop.hbase.protobuf.generated.HBaseProtos;
 import org.apache.hadoop.hbase.util.VersionInfo;
+
+import java.io.IOException;
+import java.io.InputStream;
 
 public class ProtobufUtil {
 
@@ -14,5 +20,20 @@ public class ProtobufUtil {
         builder.setDate(VersionInfo.getDate());
         builder.setSrcChecksum(VersionInfo.getSrcChecksum());
         return builder.build();
+    }
+
+    public static void mergeDelimitedFrom(Message.Builder builder, InputStream in)
+            throws IOException {
+        // This used to be builder.mergeDelimitedFrom(in);
+        // but is replaced to allow us to bump the protobuf size limit.
+        final int firstByte = in.read();
+        if (firstByte != -1) {
+            final int size = CodedInputStream.readRawVarint32(firstByte, in);
+            final InputStream limitedInput = new LimitInputStream(in, size);
+            final CodedInputStream codedInput = CodedInputStream.newInstance(limitedInput);
+            codedInput.setSizeLimit(size);
+            builder.mergeFrom(codedInput);
+            codedInput.checkLastTagWas(0);
+        }
     }
 }

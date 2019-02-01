@@ -72,4 +72,10 @@ public class Call {
         return this.callStats.getStartTime();
     }
 
+    public void setResponse(Message response, final CellScanner cells) {
+        this.response = response;
+        this.cells = cells;
+        callComplete();
+    }
+
 }

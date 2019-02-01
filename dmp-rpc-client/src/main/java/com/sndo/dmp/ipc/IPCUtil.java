@@ -4,6 +4,7 @@ import com.google.common.base.Preconditions;
 import com.google.protobuf.CodedOutputStream;
 import com.google.protobuf.Message;
 import com.sndo.dmp.DoNotRetryIOException;
+import org.apache.commons.io.IOUtils;
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
 import org.apache.hadoop.conf.Configurable;
@@ -16,11 +17,11 @@ import org.apache.hadoop.hbase.io.ByteBufferOutputStream;
 import org.apache.hadoop.hbase.io.HeapSize;
 import org.apache.hadoop.hbase.util.Bytes;
 import org.apache.hadoop.hbase.util.ClassSize;
-import org.apache.hadoop.io.compress.CodecPool;
-import org.apache.hadoop.io.compress.CompressionCodec;
-import org.apache.hadoop.io.compress.Compressor;
+import org.apache.hadoop.io.compress.*;
 
+import java.io.ByteArrayInputStream;
 import java.io.IOException;
+import java.io.InputStream;
 import java.io.OutputStream;
 import java.nio.BufferOverflowException;
 import java.nio.ByteBuffer;
@@ -172,6 +173,61 @@ public class IPCUtil {
         }
         Preconditions.checkArgument(totalSize < Integer.MAX_VALUE);
         return totalSize;
+    }
+
+    /**
+     * @param codec
+     * @param cellBlock
+     * @return CellScanner to work against the content of <code>cellBlock</code>
+     * @throws IOException
+     */
+    public CellScanner createCellScanner(final Codec codec, final CompressionCodec compressor,
+                                         final byte [] cellBlock)
+            throws IOException {
+        return createCellScanner(codec, compressor, cellBlock, 0, cellBlock.length);
+    }
+
+    /**
+     * @param codec
+     * @param cellBlock
+     * @param offset
+     * @param length
+     * @return CellScanner to work against the content of <code>cellBlock</code>
+     * @throws IOException
+     */
+    public CellScanner createCellScanner(final Codec codec, final CompressionCodec compressor,
+                                         final byte [] cellBlock, final int offset, final int length)
+            throws IOException {
+        // If compressed, decompress it first before passing it on else we will leak compression
+        // resources if the stream is not closed properly after we let it out.
+        InputStream is = null;
+        if (compressor != null) {
+            // GZIPCodec fails w/ NPE if no configuration.
+            if (compressor instanceof Configurable) ((Configurable)compressor).setConf(this.conf);
+            Decompressor poolDecompressor = CodecPool.getDecompressor(compressor);
+            CompressionInputStream cis =
+                    compressor.createInputStream(new ByteArrayInputStream(cellBlock, offset, length),
+                            poolDecompressor);
+            ByteBufferOutputStream bbos = null;
+            try {
+                // TODO: This is ugly.  The buffer will be resized on us if we guess wrong.
+                // TODO: Reuse buffers.
+                bbos = new ByteBufferOutputStream((length - offset) *
+                        this.cellBlockDecompressionMultiplier);
+                IOUtils.copy(cis, bbos);
+                bbos.close();
+                ByteBuffer bb = bbos.getByteBuffer();
+                is = new ByteArrayInputStream(bb.array(), 0, bb.limit());
+            } finally {
+                if (is != null) is.close();
+                if (bbos != null) bbos.close();
+
+                CodecPool.returnDecompressor(poolDecompressor);
+            }
+        } else {
+            is = new ByteArrayInputStream(cellBlock, offset, length);
+        }
+        return codec.getDecoder(is);
     }
 
 }

@@ -1,6 +1,5 @@
 package com.sndo.dmp.ipc;
 
-
 import org.apache.hadoop.hbase.CellScannable;
 import org.apache.hadoop.hbase.CellScanner;
 import org.apache.hadoop.hbase.CellUtil;
@@ -15,7 +14,7 @@ public class PayloadCarryingRpcController extends TimeLimitedRpcController imple
     private CellScanner cellScanner;
 
     public PayloadCarryingRpcController() {
-        this((CellScanner)null);
+        this((CellScanner) null);
     }
 
     public PayloadCarryingRpcController(final CellScanner cellScanner) {

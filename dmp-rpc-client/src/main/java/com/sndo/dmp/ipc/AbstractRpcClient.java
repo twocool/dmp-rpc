@@ -26,24 +26,24 @@ public abstract class AbstractRpcClient implements RpcClient {
 
     private static final Log LOG = LogFactory.getLog(AbstractRpcClient.class);
 
-    protected final Configuration conf;
-    protected final SocketAddress localAddr;
+    protected final Configuration conf; // 服务配置类
+    protected final SocketAddress localAddr;    // 服务地址
 
-    protected final int minIdleTimeBeforeClose;
-    protected final int maxRetries;
-    protected final long failureSleep;
+    protected final int minIdleTimeBeforeClose; // 空闲最大时长
+    protected final int maxRetries; // 连接最大尝试次数
+    protected final long failureSleep;  // 失败休眠时间
 
-    protected final boolean tcpNoDelay;
-    protected final boolean tcpKeepAlive;
+    protected final boolean tcpNoDelay; // tcp是否delay
+    protected final boolean tcpKeepAlive;   // tcp是否keep alive
 
-    protected final int connectTimeout;
-    protected final int readTimeout;
-    protected final int writeTimeout;
+    protected final int connectTimeout; // 连接超时时长
+    protected final int readTimeout;    // 读取超时时长
+    protected final int writeTimeout;   // 写入超时时长
 
-    protected final Codec codec;
-    protected final CompressionCodec compressor;
+    protected final Codec codec;    // 编码
+    protected final CompressionCodec compressor;    // 压缩器
 
-    protected final IPCUtil ipcUtil;
+    protected final IPCUtil ipcUtil;    // IPC(Inter-Process Communication: 进程间通信)工具类
 
     public AbstractRpcClient(Configuration conf, SocketAddress localAddr) {
         this.conf = conf;
@@ -67,6 +67,7 @@ public abstract class AbstractRpcClient implements RpcClient {
         this.ipcUtil = new IPCUtil(conf);
     }
 
+    // 获取编码类
     Codec getCodec() {
         // For NO CODEC, "hbase.client.rpc.codec" must be configured with empty string AND
         // "hbase.client.default.rpc.codec" also -- because default is to do cell block encoding.
@@ -79,6 +80,7 @@ public abstract class AbstractRpcClient implements RpcClient {
         }
     }
 
+    // 获取默认codec_class
     public static String getDefaultCodec(final Configuration c) {
         // If "hbase.client.default.rpc.codec" is empty string -- you can't set it to null because
         // Configuration will complain -- then no default codec (and we'll pb everything).  Else
@@ -86,6 +88,7 @@ public abstract class AbstractRpcClient implements RpcClient {
         return c.get(DEFAULT_CODEC_CLASS, KeyValueCodec.class.getCanonicalName());
     }
 
+    // 获取压缩器类
     private CompressionCodec getCompressor() {
         String className = conf.get("hbase.client.rpc.compressor", null);
         if (className == null || className.isEmpty()) return null;
@@ -106,6 +109,7 @@ public abstract class AbstractRpcClient implements RpcClient {
         return config.getInt(HConstants.HBASE_CLIENT_IPC_POOL_SIZE, 1);
     }
 
+    // 封装Exception
     protected IOException wrapException(InetSocketAddress addr, Exception exception) {
         if (exception instanceof ConnectException) {
             // connection refused; include the host:port in the error
@@ -129,13 +133,13 @@ public abstract class AbstractRpcClient implements RpcClient {
             pcrc = new PayloadCarryingRpcController();
         }
 
-        Pair<Message, CellScanner> val;
+        Pair<Message, CellScanner> val; // 返回值
         try {
-            final MetricsConnection.CallStats callStats = MetricsConnection.callStats();
-            callStats.setStartTime(EnvironmentEdgeManager.currentTime());
-            val = call(pcrc, method, param, returnType, isa, callStats);
+            final MetricsConnection.CallStats callStats = MetricsConnection.callStats();    // call状态
+            callStats.setStartTime(EnvironmentEdgeManager.currentTime());   // 设置开始时间
+            val = call(pcrc, method, param, returnType, isa, callStats);    // 调用服务
             pcrc.setCellScanner(val.getSecond());
-            callStats.setCallTimeMs(EnvironmentEdgeManager.currentTime() - callStats.getStartTime());
+            callStats.setCallTimeMs(EnvironmentEdgeManager.currentTime() - callStats.getStartTime());   // 调用服务耗时; 单位: 毫秒
             if (LOG.isTraceEnabled()) {
                 LOG.trace("Call: " + method.getName() + ", callTime: " + (EnvironmentEdgeManager.currentTime() - callStats.getStartTime()) + "ms");
             }

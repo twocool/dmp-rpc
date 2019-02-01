@@ -2,8 +2,8 @@ package com.sndo.dmp;
 
 public class ServerName {
 
-    private final String servername;
-    private final int port;
+    private final String servername;    // 服务hostname
+    private final int port; // 服务端口
 
     private ServerName(final String servername, final int port) {
         this.servername = servername;

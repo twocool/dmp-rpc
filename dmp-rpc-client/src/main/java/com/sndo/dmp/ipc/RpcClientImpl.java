@@ -13,6 +13,7 @@ import org.apache.commons.logging.LogFactory;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.hbase.CellScanner;
 import org.apache.hadoop.hbase.codec.Codec;
+import org.apache.hadoop.hbase.protobuf.generated.RPCProtos.ResponseHeader;
 import org.apache.hadoop.hbase.protobuf.generated.RPCProtos.CellBlockMeta;
 import org.apache.hadoop.hbase.protobuf.generated.RPCProtos.RequestHeader;
 import org.apache.hadoop.hbase.protobuf.generated.RPCProtos.ConnectionHeader;
@@ -543,7 +544,57 @@ public class RpcClientImpl extends AbstractRpcClient {
                 return;
             }
 
+            Call call = null;
+            boolean expectedCall = false;
 
+            try {
+                int totalSize = in.readInt();
+
+                ResponseHeader responseHeader = ResponseHeader.parseDelimitedFrom(in);
+                int id = responseHeader.getCallId();
+                call = calls.remove(id);
+
+                expectedCall = (call != null && !call.done);
+                if (!expectedCall) {
+                    // TODO do nothings
+                }
+
+                if (responseHeader.hasException()) {
+                    // TODO do nothings
+                } else {
+                    Message value = null;
+                    if (call.responseDefaultType != null) {
+                        Message.Builder builder = call.responseDefaultType.newBuilderForType();
+                        ProtobufUtil.mergeDelimitedFrom(builder, in);
+                        value = builder.build();
+                    }
+
+                    CellScanner cellBlockScanner = null;
+                    if (responseHeader.hasCellBlockMeta()) {
+                        int size = responseHeader.getCellBlockMeta().getLength();
+                        byte[] cellBlock = new byte[size];
+                        IOUtils.readFully(this.in, cellBlock, 0, cellBlock.length);
+                        cellBlockScanner = ipcUtil.createCellScanner(this.codec, this.compressor, cellBlock);
+                    }
+                    call.setResponse(value, cellBlockScanner);
+                    call.callStats.setRequestSizeBytes(totalSize);
+                    call.callStats.setCallTimeMs(EnvironmentEdgeManager.currentTime() - call.callStats.getStartTime());
+                }
+            } catch (IOException e) {
+                if (expectedCall) {
+                    call.setException(e);
+                }
+
+                if (e instanceof SocketTimeoutException) {
+                    if (LOG.isTraceEnabled()) {
+                        LOG.trace("ignored", e);
+                    }
+                } else {
+                    markClosed(e);
+                }
+            } finally {
+                cleanupCalls(false);
+            }
 
         }
 
