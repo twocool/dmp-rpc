@@ -68,14 +68,14 @@ public class Call {
         callComplete();
     }
 
-    public long getStartTime() {
-        return this.callStats.getStartTime();
-    }
-
     public void setResponse(Message response, final CellScanner cells) {
         this.response = response;
         this.cells = cells;
         callComplete();
+    }
+
+    public long getStartTime() {
+        return this.callStats.getStartTime();
     }
 
 }

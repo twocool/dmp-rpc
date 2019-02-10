@@ -22,6 +22,13 @@ public class ProtobufUtil {
         return builder.build();
     }
 
+    /**
+     * This version of protobuf's mergeDelimitedFrom avoids the hard-coded 64MB limit for decoding
+     * buffers
+     * @param builder current message builder
+     * @param in Inputsream with delimited protobuf data
+     * @throws IOException
+     */
     public static void mergeDelimitedFrom(Message.Builder builder, InputStream in)
             throws IOException {
         // This used to be builder.mergeDelimitedFrom(in);

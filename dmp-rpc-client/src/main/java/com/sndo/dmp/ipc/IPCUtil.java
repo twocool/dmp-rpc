@@ -175,12 +175,6 @@ public class IPCUtil {
         return totalSize;
     }
 
-    /**
-     * @param codec
-     * @param cellBlock
-     * @return CellScanner to work against the content of <code>cellBlock</code>
-     * @throws IOException
-     */
     public CellScanner createCellScanner(final Codec codec, final CompressionCodec compressor,
                                          final byte [] cellBlock)
             throws IOException {
