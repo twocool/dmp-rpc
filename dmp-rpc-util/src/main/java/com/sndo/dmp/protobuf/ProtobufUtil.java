@@ -43,4 +43,21 @@ public class ProtobufUtil {
             codedInput.checkLastTagWas(0);
         }
     }
+
+    /**
+     * This version of protobuf's mergeFrom avoids the hard-coded 64MB limit for decoding
+     * buffers when working with byte arrays
+     * @param builder current message builder
+     * @param b byte array
+     * @param offset
+     * @param length
+     * @throws IOException
+     */
+    public static void mergeFrom(Message.Builder builder, byte[] b, int offset, int length)
+            throws IOException {
+        final CodedInputStream codedInput = CodedInputStream.newInstance(b, offset, length);
+        codedInput.setSizeLimit(length);
+        builder.mergeFrom(codedInput);
+        codedInput.checkLastTagWas(0);
+    }
 }

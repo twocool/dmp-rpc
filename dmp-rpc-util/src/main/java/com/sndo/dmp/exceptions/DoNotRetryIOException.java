@@ -1,4 +1,4 @@
-package com.sndo.dmp;
+package com.sndo.dmp.exceptions;
 
 import org.apache.hadoop.hbase.HBaseIOException;
 

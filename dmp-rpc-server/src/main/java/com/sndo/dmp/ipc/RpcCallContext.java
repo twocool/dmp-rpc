@@ -4,6 +4,6 @@ import java.net.InetAddress;
 
 public interface RpcCallContext {
 
-    InetAddress getRemotAddress();
+    InetAddress getRemoteAddress();
 
 }

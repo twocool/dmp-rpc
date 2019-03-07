@@ -165,7 +165,7 @@ public abstract class AbstractRpcClient implements RpcClient {
         public BlockingRpcChannelImplementation(final AbstractRpcClient rpcClient,
                                                 final ServerName sn,
                                                 int channelOperationTimeout) {
-            this.isa = new InetSocketAddress(sn.getServername(), sn.getPort());
+            this.isa = new InetSocketAddress(sn.getHostName(), sn.getPort());
             this.rpcClient = rpcClient;
             this.channelOperateTimeout = channelOperationTimeout;
         }

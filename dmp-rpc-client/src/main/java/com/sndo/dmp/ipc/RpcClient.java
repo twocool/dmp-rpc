@@ -22,7 +22,7 @@ public interface RpcClient extends Closeable {
     public BlockingRpcChannel createBlockingRpcChannel(ServerName serverName, int rpcTimeout);
 
     // 取消服务连接
-    public void cancleConnections(ServerName serverName);
+    public void cancelConnections(ServerName serverName);
 
     @Override
     void close() throws IOException;

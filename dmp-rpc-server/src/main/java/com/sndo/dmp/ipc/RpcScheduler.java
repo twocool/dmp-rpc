@@ -14,6 +14,6 @@ public abstract class RpcScheduler {
 
     public abstract void stop();
 
-    public abstract void dispatch();
+    public abstract void dispatch(CallRunner task) throws InterruptedException;
 
 }

@@ -3,7 +3,7 @@ package com.sndo.dmp.ipc;
 import com.google.common.base.Preconditions;
 import com.google.protobuf.CodedOutputStream;
 import com.google.protobuf.Message;
-import com.sndo.dmp.DoNotRetryIOException;
+import com.sndo.dmp.exceptions.DoNotRetryIOException;
 import org.apache.commons.io.IOUtils;
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
@@ -222,6 +222,26 @@ public class IPCUtil {
             is = new ByteArrayInputStream(cellBlock, offset, length);
         }
         return codec.getDecoder(is);
+    }
+
+    /**
+     * @param m Message to serialize delimited; i.e. w/ a vint of its size preceeding its
+     * serialization.
+     * @return The passed in Message serialized with delimiter.  Return null if <code>m</code> is null
+     * @throws IOException
+     */
+    public static ByteBuffer getDelimitedMessageAsByteBuffer(final Message m) throws IOException {
+        if (m == null) return null;
+        int serializedSize = m.getSerializedSize();
+        int vintSize = CodedOutputStream.computeRawVarint32Size(serializedSize);
+        byte [] buffer = new byte[serializedSize + vintSize];
+        // Passing in a byte array saves COS creating a buffer which it does when using streams.
+        CodedOutputStream cos = CodedOutputStream.newInstance(buffer);
+        // This will write out the vint preamble and the message serialized.
+        cos.writeMessageNoTag(m);
+        cos.flush();
+        cos.checkNoSpaceLeft();
+        return ByteBuffer.wrap(buffer);
     }
 
 }

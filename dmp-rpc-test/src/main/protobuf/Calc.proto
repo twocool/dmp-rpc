@@ -1,0 +1,19 @@
+option java_package = "com.sndo.dmp.proto.generated";
+
+option java_outer_classname = "CalcProto";
+option java_generic_services = true;
+option java_generate_equals_and_hash = true;
+
+message CalcRequest {
+   required int32 param1 = 2;
+   required int32 param2 = 3;
+}
+
+message CalcResponse {
+   required int32 result = 1;
+}
+
+service CalcService {
+   rpc add(CalcRequest) returns (CalcResponse);
+   rpc minus(CalcRequest) returns (CalcResponse);
+}

@@ -2,10 +2,12 @@ package com.sndo.dmp.ipc;
 
 import com.google.protobuf.Descriptors;
 import com.google.protobuf.Message;
-import com.sndo.dmp.DoNotRetryIOException;
 import com.sndo.dmp.ServerName;
 import com.sndo.dmp.client.MetricsConnection;
 import com.sndo.dmp.exceptions.ConnectionClosingException;
+import com.sndo.dmp.exceptions.DoNotRetryIOException;
+import com.sndo.dmp.exceptions.FailedServerException;
+import com.sndo.dmp.exceptions.StoppedRpcClientException;
 import com.sndo.dmp.protobuf.ProtobufUtil;
 import com.sndo.dmp.util.PoolMap;
 import org.apache.commons.logging.Log;
@@ -29,8 +31,10 @@ import java.io.*;
 import java.net.*;
 import java.nio.ByteBuffer;
 import java.rmi.RemoteException;
+import java.util.HashSet;
 import java.util.Iterator;
 import java.util.Map;
+import java.util.Set;
 import java.util.concurrent.ConcurrentSkipListMap;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -47,21 +51,75 @@ public class RpcClientImpl extends AbstractRpcClient {
 
     private final FailedServers failedServers;
 
-    public RpcClientImpl(Configuration conf, SocketFactory factory, SocketAddress localAddr) {
+    public RpcClientImpl(Configuration conf, SocketAddress localAddr) {
         super(conf, localAddr);
 
-        this.socketFactory = factory;
+        this.socketFactory = NetUtils.getDefaultSocketFactory(conf);
         this.connections = new PoolMap<ConnectionId, Connection>(getPoolType(conf), getPoolSize(conf));
         this.failedServers = new FailedServers(conf);
     }
 
     @Override
-    public void cancleConnections(ServerName serverName) {
+    public void cancelConnections(ServerName serverName) {
+        synchronized (connections) {
+            for (Connection connection : connections.values()) {
+                if (connection.isAlive() &&
+                        connection.getRemoteAddress().getPort() == serverName.getPort() &&
+                        connection.getRemoteAddress().getHostName().equals(serverName.getHostName())) {
+                    LOG.info("The server on " + serverName.toString() +
+                            " is dead - stopping the connection " + connection.remoteId);
+                    connection.interrupt();
+                }
+            }
 
+        }
     }
 
     @Override
     public void close() throws IOException {
+        if (LOG.isDebugEnabled()) {
+            LOG.debug("Stopping rpc client");
+        }
+
+        if (!running.compareAndSet(true, false)) {
+            return;
+        }
+
+        Set<Connection> connsToClose = null;
+        synchronized (connections) {
+            for (Connection conn : connections.values()) {
+                conn.interrupt();
+                if (conn.callSender != null) {
+                    conn.callSender.interrupt();
+                }
+
+                if (!conn.isAlive()) {
+                    if (connsToClose == null) {
+                        connsToClose = new HashSet<Connection>();
+                    }
+                    connsToClose.add(conn);
+                }
+            }
+        }
+
+        if (connsToClose != null) {
+            for (Connection conn : connsToClose) {
+                if (conn.markClosed(new InterruptedIOException("RpcClient is closing"))) {
+                    conn.close();
+                }
+            }
+        }
+
+        while (!connections.isEmpty()) {
+            try {
+                Thread.sleep(10);
+            } catch (InterruptedException e) {
+                LOG.info("Interrupted while stopping the clinet. We still have" + connections.size() +
+                    "");
+                Thread.currentThread().interrupt();
+                return;
+            }
+        }
 
     }
 
@@ -119,13 +177,12 @@ public class RpcClientImpl extends AbstractRpcClient {
         return new Pair<Message, CellScanner>(call.response, call.cells);
     }
 
-
     private Connection getConnection(Call call, InetSocketAddress addr) throws IOException {
         if (!running.get()) {
             throw new StoppedRpcClientException();
         }
         Connection connection;
-        ConnectionId connectionId = new ConnectionId(call.method.getName(), addr);
+        ConnectionId connectionId = new ConnectionId(call.method.getService().getName(), addr);
         synchronized (connections) {
             connection = connections.get(connectionId);
             if (connection == null) {
@@ -536,6 +593,12 @@ public class RpcClientImpl extends AbstractRpcClient {
                     LOG.debug(getName() + ": unexpected throwable while waiting for call responses", t);
                 }
                 markClosed(new IOException("Unexpected throwable while waiting call responses", t));
+            }
+
+            close();
+
+            if (LOG.isTraceEnabled()) {
+                LOG.trace(getName() + ": stopped, connections " + connections.size());
             }
         }
 

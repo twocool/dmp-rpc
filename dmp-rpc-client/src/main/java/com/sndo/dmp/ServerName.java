@@ -5,8 +5,8 @@ public class ServerName {
     private final String servername;    // 服务hostname
     private final int port; // 服务端口
 
-    private ServerName(final String servername, final int port) {
-        this.servername = servername;
+    private ServerName(final String hostname, final int port) {
+        this.servername = hostname;
         this.port = port;
     }
 
@@ -14,7 +14,7 @@ public class ServerName {
         return new ServerName(hostname, port);
     }
 
-    public String getServername() {
+    public String getHostName() {
         return servername;
     }
 

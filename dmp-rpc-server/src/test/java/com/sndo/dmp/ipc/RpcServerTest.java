@@ -4,6 +4,7 @@ import org.junit.Test;
 
 import java.io.IOException;
 import java.net.InetSocketAddress;
+import java.nio.channels.SelectionKey;
 
 /**
  * @author yangqi
@@ -18,4 +19,5 @@ public class RpcServerTest {
         server.start();
         server.join();
     }
+
 }

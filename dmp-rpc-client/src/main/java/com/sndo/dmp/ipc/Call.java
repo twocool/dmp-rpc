@@ -3,6 +3,7 @@ package com.sndo.dmp.ipc;
 import com.google.protobuf.Descriptors;
 import com.google.protobuf.Message;
 import com.sndo.dmp.client.MetricsConnection;
+import com.sndo.dmp.exceptions.CallTimeoutException;
 import org.apache.hadoop.hbase.CellScanner;
 import org.apache.hadoop.hbase.util.EnvironmentEdgeManager;
 
